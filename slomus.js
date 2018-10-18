@@ -1,5 +1,5 @@
 // Slomux - реализация Flux, в которой, как следует из нвазвания, что-то сломано.
-// Нужно выяснить что здесь сломано
+// Нужно выяснить, что здесь сломано
 
 const createStore = (reducer, initialState) => {
   let currentState = initialState
@@ -22,6 +22,7 @@ const connect = (mapStateToProps, mapDispatchToProps) =>
       render() {
         return (
           <Component
+            {...this.props} // 1: Необходимо добавить собственные свойства компонента
             {...mapStateToProps(store.getState(), this.props)}
             {...mapDispatchToProps(store.dispatch, this.props)}
           />
@@ -40,9 +41,9 @@ const connect = (mapStateToProps, mapDispatchToProps) =>
 
 class Provider extends React.Component {
   componentWillMount() {
-    window.store = this.props.store
+    window.store = this.props.store // Теоретически, в случае использования двух и более экземпляров компонента, перетрет store.
   }
-  
+
   render() {
     return this.props.children
   }
@@ -63,56 +64,65 @@ const addTodo = todo => ({
 const reducer = (state = [], action) => {
   switch(action.type) {
     case ADD_TODO:
-      state.push(action.payload)
-      return state
+      return [...state, action.payload] // 2: Immutability, дабы можно было использовать поверхностное сравнение
     default:
       return state
   }
 }
 
 // components
-class ToDoComponent extends React.Component {
+class ToDoComponent extends React.PureComponent { // 3: PureComponent обеспечит более оптимальную реализацию shouldComponentUpdate, чем просто Component
   state = {
     todoText: ''
   }
 
   render() {
+    const { title, todos } = this.props // Косметические изменения
+    const { todoText } = this.state
+
     return (
       <div>
-        <label>{this.props.title || 'Без названия'}</label>
+        <label>{title || 'Без названия'}</label>
         <div>
           <input
-            value={this.state.todoText}
+            value={todoText}
             placeholder="Название задачи"
             onChange={this.updateText}
           />
           <button onClick={this.addTodo}>Добавить</button>
           <ul>
-            {this.props.todos.map((todo, idx) => <li>{todo}</li>)}
+            {todos.map((todo, idx) => <li key={idx}>{todo}</li>)} {/* 4: Добавим key, чтобы реакт не перерисовывал существующую часть списка */}
           </ul>
         </div>
       </div>
     )
   }
 
-  updateText(e) {
+  updateText = (e) => { // 5: Используем стрелочные функции, чтобы иметь корректный контекст
     const { value } = e.target
 
-    this.state.todoText = value
+    this.setState({ todoText: value }) // 6: Корректное обновление state
   }
 
-  addTodo() {
-    this.props.addTodo(this.state.todoText)
+  addTodo = () => {
+    const { todoText } = this.state // Косметические изменения
+    const { addTodo } = this.props
+    addTodo(todoText)
 
-    this.state.todoText = ''
+    this.setState({ todoText: '' }) // 6: Корректное обновление state
   }
 }
 
-const ToDo = connect(state => ({
-  todos: state,
-}), dispatch => ({
+// Косметические изменения, но делают код более читаемым
+const mapStateToProps = state => ({
+  todos: state
+})
+
+const mapDispatchToProps = dispatch => ({
   addTodo: text => dispatch(addTodo(text)),
-}))(ToDoComponent)
+})
+
+const ToDo = connect(mapStateToProps, mapDispatchToProps)(ToDoComponent)
 
 // init
 ReactDOM.render(
